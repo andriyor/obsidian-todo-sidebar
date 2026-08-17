@@ -1,9 +1,15 @@
+import type { CachedMetadata, ListItemCache } from "obsidian";
+
 /**
- * Markdown checkbox parsing.
+ * Task extraction from Obsidian's metadata cache.
  *
- * We parse the note text ourselves rather than reading `metadataCache.listItems`
- * so the sidebar can update from unsaved editor content, which the cache does
- * not see until Obsidian re-indexes the file.
+ * The cache already knows which list items are tasks, their status character and
+ * their parent item, and it applies Obsidian's own markdown rules — so fenced
+ * code blocks, frontmatter and indentation never have to be handled here.
+ *
+ * The cache describes the file *on disk*, so `content` must be the saved text
+ * (`Vault.cachedRead`, or the `data` argument of `metadataCache.on("changed")`).
+ * Pairing cache positions with unsaved editor text would misalign line numbers.
  */
 
 export interface TaskItem {
@@ -16,128 +22,89 @@ export interface TaskItem {
 	checked: boolean;
 	/** Markdown source of the task text (everything after `[x] `). */
 	text: string;
-	/** Visual indent width of the line, tabs expanded. */
-	indent: number;
 	children: TaskItem[];
 }
 
-/** `- [ ] text`, `* [x] text`, `1. [-] text`, … */
-const TASK_RE = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)\[(.)\](?:[ \t]+(.*))?$/;
-/** Any list item, task or not — used to keep the indent stack sane. */
-const LIST_RE = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+/;
-const FENCE_RE = /^[ \t]*(`{3,}|~{3,})/;
+/** Builds the task tree for a note from its cached metadata. */
+export function tasksFromCache(
+	cache: CachedMetadata | null,
+	content: string,
+): TaskItem[] {
+	const items = cache?.listItems;
+	if (!items || items.length === 0) return [];
 
-const TAB_WIDTH = 4;
-
-function indentWidth(whitespace: string): number {
-	let width = 0;
-	for (const ch of whitespace) {
-		width += ch === "\t" ? TAB_WIDTH - (width % TAB_WIDTH) : 1;
-	}
-	return width;
-}
-
-function popTo(stack: { indent: number; item: TaskItem | null }[], indent: number): void {
-	while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
-		stack.pop();
-	}
-}
-
-/**
- * Extracts every checkbox in `content` as a tree, nested by indentation.
- * Frontmatter and fenced code blocks are skipped.
- */
-export function parseTasks(content: string): TaskItem[] {
 	const lines = content.split("\n");
 	const roots: TaskItem[] = [];
-	// Every enclosing list item, tasks and plain bullets alike. Plain bullets are
-	// tracked as `null` so a task nested under one is not mistakenly attached to
-	// an unrelated task that happens to sit at a shallower indent.
-	const stack: { indent: number; item: TaskItem | null }[] = [];
+	/** Every list item by its start line, tasks and plain bullets alike. */
+	const itemsByLine = new Map<number, ListItemCache>();
+	/** Only the items that are tasks, so ancestors can be resolved. */
+	const tasksByLine = new Map<number, TaskItem>();
 
-	let start = 0;
-	// Skip YAML frontmatter.
-	if (lines[0]?.trim() === "---") {
-		for (let i = 1; i < lines.length; i++) {
-			const trimmed = lines[i].trim();
-			if (trimmed === "---" || trimmed === "...") {
-				start = i + 1;
-				break;
-			}
-		}
+	for (const item of items) {
+		itemsByLine.set(item.position.start.line, item);
 	}
 
-	let fence: string | null = null;
+	// listItems is in document order, so parents are always seen before children.
+	for (const item of items) {
+		if (item.task === undefined) continue;
 
-	for (let i = start; i < lines.length; i++) {
-		const line = lines[i].replace(/\r$/, "");
+		const lineNumber = item.position.start.line;
+		const line = lines[lineNumber];
+		if (line === undefined) continue;
 
-		const fenceMatch = FENCE_RE.exec(line);
-		if (fence !== null) {
-			// Inside a code block: only a matching closing fence is interesting.
-			if (
-				fenceMatch &&
-				fenceMatch[1][0] === fence[0] &&
-				fenceMatch[1].length >= fence.length &&
-				line.slice(fenceMatch[0].length).trim() === ""
-			) {
-				fence = null;
-			}
-			continue;
-		}
-		if (fenceMatch) {
-			fence = fenceMatch[1];
-			continue;
-		}
+		// Between the bullet and the checkbox there is only whitespace, so the
+		// first '[' at or after the item's start column is the task marker.
+		const bracket = line.indexOf("[", Math.max(0, item.position.start.col));
+		if (bracket === -1 || line[bracket + 2] !== "]") continue;
 
-		const task = TASK_RE.exec(line);
-		if (task) {
-			const [, whitespace, bullet, gap, status, text] = task;
-			const indent = indentWidth(whitespace);
-			popTo(stack, indent);
+		const markerCol = bracket + 1;
+		const status = line[markerCol];
 
-			const item: TaskItem = {
-				line: i,
-				markerCol: whitespace.length + bullet.length + gap.length + 1,
-				status,
-				checked: status !== " ",
-				text: (text ?? "").trim(),
-				indent,
-				children: [],
-			};
+		const task: TaskItem = {
+			line: lineNumber,
+			markerCol,
+			status,
+			checked: status !== " ",
+			text: line.slice(bracket + 3).trim(),
+			children: [],
+		};
 
-			// Nearest enclosing task, if any; plain-bullet ancestors are skipped.
-			let parent: TaskItem | null = null;
-			for (let s = stack.length - 1; s >= 0; s--) {
-				if (stack[s].item) {
-					parent = stack[s].item;
-					break;
-				}
-			}
+		tasksByLine.set(lineNumber, task);
 
-			if (parent) parent.children.push(item);
-			else roots.push(item);
-
-			stack.push({ indent, item });
-			continue;
-		}
-
-		const list = LIST_RE.exec(line);
-		if (list) {
-			const indent = indentWidth(list[1]);
-			popTo(stack, indent);
-			stack.push({ indent, item: null });
-			continue;
-		}
-
-		// A non-list, non-blank line at the left margin ends the current list,
-		// so following tasks are not nested under the previous section's tasks.
-		if (line.trim() !== "" && !/^[ \t]/.test(line)) {
-			stack.length = 0;
-		}
+		const parent = nearestTaskAncestor(item, itemsByLine, tasksByLine);
+		if (parent) parent.children.push(task);
+		else roots.push(task);
 	}
 
 	return roots;
+}
+
+/**
+ * Walks up `ListItemCache.parent` to the closest ancestor that is itself a task.
+ * Plain-bullet ancestors are skipped, so a task nested under a plain bullet
+ * becomes a root rather than a child of an unrelated task. `parent` is negative
+ * for items at the root of a list.
+ */
+function nearestTaskAncestor(
+	item: ListItemCache,
+	itemsByLine: Map<number, ListItemCache>,
+	tasksByLine: Map<number, TaskItem>,
+): TaskItem | null {
+	let parentLine = item.parent;
+	const visited = new Set<number>();
+
+	while (parentLine >= 0 && !visited.has(parentLine)) {
+		visited.add(parentLine);
+
+		const task = tasksByLine.get(parentLine);
+		if (task) return task;
+
+		const ancestor = itemsByLine.get(parentLine);
+		if (!ancestor) return null;
+		parentLine = ancestor.parent;
+	}
+
+	return null;
 }
 
 export function countTasks(tasks: TaskItem[]): { total: number; done: number } {
@@ -152,16 +119,4 @@ export function countTasks(tasks: TaskItem[]): { total: number; done: number } {
 	};
 	walk(tasks);
 	return { total, done };
-}
-
-/** Drops completed tasks, keeping any that still have an open descendant. */
-export function filterCompleted(tasks: TaskItem[]): TaskItem[] {
-	const result: TaskItem[] = [];
-	for (const item of tasks) {
-		const children = filterCompleted(item.children);
-		if (!item.checked || children.length > 0) {
-			result.push({ ...item, children });
-		}
-	}
-	return result;
 }

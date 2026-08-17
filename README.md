@@ -5,13 +5,24 @@ An Obsidian plugin that shows every checkbox from the **currently open note** in
 ## What it does
 
 - Lists all `- [ ]` / `- [x]` items of the active note in the right sidebar, nested the way they are in the note.
-- Updates live as you type — it reads the editor buffer, so you do not have to save first.
-- Click a checkbox in the panel to toggle it in the note (through the editor, so undo works).
+- Refreshes when Obsidian re-indexes the note, i.e. shortly after a save (Obsidian's own save is debounced ~2s while you type).
+- Click a checkbox in the panel to toggle it in the note (through the editor, so undo works). The panel updates immediately and the file is saved right away.
 - Click a task's text to jump the cursor to that line in the note.
 - Header shows a `done/total` count and a progress bar.
 - Eye button in the header (or the command palette) hides completed tasks.
 - Task text is rendered as markdown, so links, `**bold**`, and tags look right.
 - Ignores checkboxes inside fenced code blocks and frontmatter.
+
+## How it reads tasks
+
+Tasks come from Obsidian's own metadata cache (`metadataCache.getFileCache(file).listItems`),
+which supplies each item's status character, position and parent line. That means the panel
+agrees with Obsidian's markdown parsing for free — code fences, frontmatter and indentation
+included — with no parsing dependency in the bundle.
+
+The trade-off: the cache describes the file *on disk*, so the panel follows saves rather than
+keystrokes, and `src/parser.ts` pairs cache positions with `Vault.cachedRead` text (never the
+unsaved editor buffer, which would misalign line numbers).
 
 ## Usage
 

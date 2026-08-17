@@ -1,5 +1,4 @@
 import {
-	Editor,
 	ItemView,
 	MarkdownRenderer,
 	MarkdownView,
@@ -8,7 +7,7 @@ import {
 	debounce,
 	setIcon,
 } from "obsidian";
-import { TaskItem, countTasks, filterCompleted, parseTasks } from "./parser";
+import { TaskItem, countTasks, tasksFromCache } from "./parser";
 import type TodoSidebarPlugin from "./main";
 
 export const VIEW_TYPE_TODO_SIDEBAR = "todo-sidebar-view";
@@ -24,6 +23,9 @@ export class TodoSidebarView extends ItemView {
 
 	/** Guards against an older async render overwriting a newer one. */
 	private renderToken = 0;
+	/** Last task tree built from the cache, kept so a toggle can redraw at once. */
+	private tasks: TaskItem[] = [];
+	private file: TFile | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: TodoSidebarPlugin) {
 		super(leaf);
@@ -57,7 +59,8 @@ export class TodoSidebarView extends ItemView {
 		this.toggleCompletedEl.addEventListener("click", async () => {
 			this.plugin.settings.hideCompleted = !this.plugin.settings.hideCompleted;
 			await this.plugin.saveSettings();
-			this.render();
+			this.updateHideCompletedIcon();
+			await this.repaint();
 		});
 
 		this.progressBarEl = this.headerEl.createDiv({ cls: "todo-sidebar-progress" });
@@ -75,15 +78,10 @@ export class TodoSidebarView extends ItemView {
 				this.requestRender();
 			}),
 		);
+		// Fires after Obsidian re-indexes a saved file, which is what the task
+		// list is built from.
 		this.registerEvent(
-			this.app.workspace.on("editor-change", (_editor, info) => {
-				if (info.file && info.file.path === this.app.workspace.getActiveFile()?.path) {
-					this.requestRender();
-				}
-			}),
-		);
-		this.registerEvent(
-			this.app.vault.on("modify", (file) => {
+			this.app.metadataCache.on("changed", (file) => {
 				if (file.path === this.app.workspace.getActiveFile()?.path) {
 					this.requestRender();
 				}
@@ -105,14 +103,11 @@ export class TodoSidebarView extends ItemView {
 	async render(): Promise<void> {
 		const token = ++this.renderToken;
 		const file = this.app.workspace.getActiveFile();
-
-		setIcon(this.toggleCompletedEl, this.plugin.settings.hideCompleted ? "eye-off" : "eye");
-		this.toggleCompletedEl.setAttribute(
-			"aria-label",
-			this.plugin.settings.hideCompleted ? "Show completed tasks" : "Hide completed tasks",
-		);
+		this.updateHideCompletedIcon();
 
 		if (!file || file.extension !== "md") {
+			this.tasks = [];
+			this.file = null;
 			this.titleEl.setText("No note open");
 			this.progressEl.setText("");
 			this.setProgress(0, 0);
@@ -122,11 +117,29 @@ export class TodoSidebarView extends ItemView {
 
 		this.titleEl.setText(file.basename);
 
-		const content = await this.readContent(file);
+		// Read the saved text, not the editor buffer: cache positions describe
+		// the file on disk and would not line up with unsaved edits.
+		const content = await this.app.vault.cachedRead(file);
 		if (token !== this.renderToken) return;
 
-		const allTasks = parseTasks(content);
-		const { total, done } = countTasks(allTasks);
+		this.tasks = tasksFromCache(this.app.metadataCache.getFileCache(file), content);
+		this.file = file;
+		await this.paint(token);
+	}
+
+	/**
+	 * Redraws from the task tree already in memory. Used after a toggle so the
+	 * panel reacts immediately, before the metadata cache catches up.
+	 */
+	private async repaint(): Promise<void> {
+		await this.paint(++this.renderToken);
+	}
+
+	private async paint(token: number): Promise<void> {
+		const file = this.file;
+		if (!file) return;
+
+		const { total, done } = countTasks(this.tasks);
 		this.progressEl.setText(total > 0 ? `${done}/${total}` : "");
 		this.setProgress(done, total);
 
@@ -135,11 +148,8 @@ export class TodoSidebarView extends ItemView {
 			return;
 		}
 
-		const tasks = this.plugin.settings.hideCompleted
-			? filterCompleted(allTasks)
-			: allTasks;
-
-		if (tasks.length === 0) {
+		const visible = this.tasks.filter((task) => this.isVisible(task));
+		if (visible.length === 0) {
 			this.renderEmpty("All tasks are done. 🎉");
 			return;
 		}
@@ -147,7 +157,7 @@ export class TodoSidebarView extends ItemView {
 		// Build off-DOM and swap in once markdown rendering settles, to avoid flicker.
 		const list = createEl("ul", { cls: "todo-sidebar-list todo-sidebar-list-root" });
 		const pending: Promise<void>[] = [];
-		this.renderTasks(tasks, list, file, pending);
+		this.renderTasks(visible, list, file, pending);
 		await Promise.all(pending);
 		if (token !== this.renderToken) return;
 
@@ -155,6 +165,21 @@ export class TodoSidebarView extends ItemView {
 		this.bodyEl.empty();
 		this.bodyEl.appendChild(list);
 		this.bodyEl.scrollTop = scrollTop;
+	}
+
+	/** Hidden only when "hide completed" is on and nothing below it is still open. */
+	private isVisible(task: TaskItem): boolean {
+		if (!this.plugin.settings.hideCompleted || !task.checked) return true;
+		return task.children.some((child) => this.isVisible(child));
+	}
+
+	private updateHideCompletedIcon(): void {
+		const hiding = this.plugin.settings.hideCompleted;
+		setIcon(this.toggleCompletedEl, hiding ? "eye-off" : "eye");
+		this.toggleCompletedEl.setAttribute(
+			"aria-label",
+			hiding ? "Show completed tasks" : "Hide completed tasks",
+		);
 	}
 
 	private renderEmpty(message: string): void {
@@ -213,33 +238,28 @@ export class TodoSidebarView extends ItemView {
 				void this.jumpToLine(file, task.line);
 			});
 
-			if (task.children.length > 0) {
+			const children = task.children.filter((child) => this.isVisible(child));
+			if (children.length > 0) {
 				const childList = li.createEl("ul", { cls: "todo-sidebar-list" });
-				this.renderTasks(task.children, childList, file, pending);
+				this.renderTasks(children, childList, file, pending);
 			}
 		}
 	}
 
-	/** Prefers unsaved editor text so the sidebar tracks typing, not just saves. */
-	private async readContent(file: TFile): Promise<string> {
-		const editor = this.getEditorFor(file);
-		if (editor) return editor.getValue();
-		return this.app.vault.cachedRead(file);
-	}
-
-	private getEditorFor(file: TFile): Editor | null {
+	private getMarkdownViewFor(file: TFile): MarkdownView | null {
 		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			const view = leaf.view as MarkdownView;
-			if (view.file?.path === file.path) return view.editor;
+			const view = leaf.view;
+			if (view instanceof MarkdownView && view.file?.path === file.path) return view;
 		}
 		return null;
 	}
 
 	private async toggleTask(file: TFile, task: TaskItem): Promise<void> {
 		const next = task.checked ? " " : "x";
-		const editor = this.getEditorFor(file);
+		const view = this.getMarkdownViewFor(file);
 
-		if (editor) {
+		if (view) {
+			const editor = view.editor;
 			if (!isMarkerAt(editor.getLine(task.line), task.markerCol)) {
 				// The note changed under us; re-read instead of corrupting a line.
 				await this.render();
@@ -250,36 +270,47 @@ export class TodoSidebarView extends ItemView {
 				{ line: task.line, ch: task.markerCol },
 				{ line: task.line, ch: task.markerCol + 1 },
 			);
+			// Editing through the editor keeps undo history, but the metadata cache
+			// only updates on save — which is otherwise debounced by 2 seconds.
+			await view.save();
 		} else {
+			let written = false;
 			await this.app.vault.process(file, (data) => {
 				const lines = data.split("\n");
 				const line = lines[task.line];
 				if (line === undefined || !isMarkerAt(line, task.markerCol)) return data;
 				lines[task.line] =
 					line.slice(0, task.markerCol) + next + line.slice(task.markerCol + 1);
+				written = true;
 				return lines.join("\n");
 			});
+			if (!written) {
+				await this.render();
+				return;
+			}
 		}
 
-		await this.render();
+		// Reflect the change now; the metadata cache event will follow with the
+		// authoritative state a moment later.
+		task.status = next;
+		task.checked = next !== " ";
+		await this.repaint();
 	}
 
 	private async jumpToLine(file: TFile, line: number): Promise<void> {
-		const leaf = this.app.workspace
-			.getLeavesOfType("markdown")
-			.find((candidate) => (candidate.view as MarkdownView).file?.path === file.path);
+		const view = this.getMarkdownViewFor(file);
 
-		if (leaf) {
-			this.app.workspace.setActiveLeaf(leaf, { focus: true });
-			const editor = (leaf.view as MarkdownView).editor;
+		if (view) {
+			this.app.workspace.setActiveLeaf(view.leaf, { focus: true });
+			const editor = view.editor;
 			const ch = editor.getLine(line)?.length ?? 0;
 			editor.setCursor({ line, ch });
 			editor.scrollIntoView({ from: { line, ch: 0 }, to: { line, ch } }, true);
 			return;
 		}
 
-		const newLeaf = this.app.workspace.getLeaf(false);
-		await newLeaf.openFile(file, { eState: { line } });
+		const leaf = this.app.workspace.getLeaf(false);
+		await leaf.openFile(file, { eState: { line } });
 	}
 }
 
