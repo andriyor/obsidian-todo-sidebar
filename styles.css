@@ -1,0 +1,133 @@
+.todo-sidebar {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 0;
+	overflow: hidden;
+}
+
+.todo-sidebar-header {
+	flex: 0 0 auto;
+	padding: 8px 12px 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.todo-sidebar-title-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.todo-sidebar-title {
+	flex: 1 1 auto;
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.todo-sidebar-count {
+	flex: 0 0 auto;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.todo-sidebar-action {
+	flex: 0 0 auto;
+}
+
+.todo-sidebar-progress {
+	margin-top: 6px;
+	height: 3px;
+	border-radius: 3px;
+	background-color: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.todo-sidebar-progress.is-hidden {
+	visibility: hidden;
+}
+
+.todo-sidebar-progress-fill {
+	height: 100%;
+	width: 0;
+	border-radius: 3px;
+	background-color: var(--interactive-accent);
+	transition: width 120ms ease-out;
+}
+
+.todo-sidebar-body {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	padding: 6px 8px 16px;
+}
+
+.todo-sidebar-empty {
+	padding: 12px 4px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+}
+
+.todo-sidebar-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.todo-sidebar-list .todo-sidebar-list {
+	padding-left: 16px;
+	border-left: 1px solid var(--background-modifier-border);
+	margin-left: 8px;
+}
+
+.todo-sidebar-item {
+	margin: 0;
+	padding: 0;
+}
+
+.todo-sidebar-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 3px 4px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	line-height: 1.35;
+}
+
+.todo-sidebar-row:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.todo-sidebar-row input.task-list-item-checkbox {
+	flex: 0 0 auto;
+	margin: 2px 0 0;
+	cursor: pointer;
+}
+
+.todo-sidebar-text {
+	flex: 1 1 auto;
+	color: var(--text-normal);
+	overflow-wrap: anywhere;
+}
+
+.todo-sidebar-text p {
+	margin: 0;
+	display: inline;
+}
+
+.todo-sidebar-text-empty {
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+.todo-sidebar-item.is-checked > .todo-sidebar-row .todo-sidebar-text {
+	color: var(--text-muted);
+	text-decoration: line-through;
+	text-decoration-color: var(--text-faint);
+}
