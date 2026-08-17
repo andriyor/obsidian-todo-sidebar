@@ -50,7 +50,34 @@ scripts by default and esbuild needs its to fetch the platform binary.
 
 Source lives in `src/`; `main.js` at the repo root is the generated bundle and is gitignored.
 
-## Install into a vault
+## Install with BRAT
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewers Auto-update Tool) installs
+plugins straight from a GitHub release and keeps them updated, so testers do not have to copy
+files by hand.
+
+1. Install and enable **BRAT** from Settings → Community plugins → Browse.
+2. Run the command **Add a beta plugin for testing** (or Settings → BRAT → Add beta plugin).
+3. Enter the repository path: `andriyor/obsidian-todo-sidebar`.
+4. Enable **Todo Sidebar** in Settings → Community plugins.
+
+BRAT tracks the latest release by default; use the *edit* button beside the plugin in BRAT's
+settings to pin ("freeze") a specific release tag instead. Removing a plugin from BRAT's list
+stops updates but does not uninstall it — remove it from Community plugins for that.
+
+> **No release published yet**, so there is nothing for BRAT to fetch just yet. BRAT installs
+> from a GitHub release's **assets**, which must include `main.js`, `manifest.json`, and
+> `styles.css` (BRAT reads the manifest from the release assets, not the repo root). The release
+> tag, release name, and the `version` inside the released `manifest.json` must all be
+> identical — e.g. all three set to `1.0.0`, or `1.0.1-beta.1` for a pre-release. Because
+> `main.js` is gitignored, run `pnpm build` before attaching it, or generate it in a release
+> workflow.
+
+BRAT also works with private repositories, via a fine-grained personal access token with
+read-only *Contents* permission for that repo. Heavy install/reinstall cycles can hit GitHub's
+60-requests-per-hour anonymous API limit; adding a token in BRAT's settings raises it.
+
+## Install manually
 
 Copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/todo-sidebar/`:
 
