@@ -1,7 +1,7 @@
 {
 	"id": "todo-sidebar",
 	"name": "Todo Sidebar",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "1.5.0",
 	"description": "Lists every checkbox from the currently open note in a sidebar panel. Toggle tasks or jump to their line.",
 	"author": "aoriekhov",
