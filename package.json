@@ -4,14 +4,12 @@
 	"description": "Obsidian plugin that shows the checkboxes of the active note in a sidebar.",
 	"main": "main.js",
 	"private": true,
-	"packageManager": "pnpm@10.33.2",
-	"pnpm": {
-		"onlyBuiltDependencies": ["esbuild"]
-	},
+	"packageManager": "pnpm@11.22.0",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
-		"typecheck": "tsc --noEmit --skipLibCheck"
+		"typecheck": "tsc --noEmit --skipLibCheck",
+		"test": "node --test --experimental-strip-types test/parser.test.mts"
 	},
 	"license": "MIT",
 	"devDependencies": {

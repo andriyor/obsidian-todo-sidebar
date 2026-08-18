@@ -1,0 +1,4 @@
+# pnpm blocks postinstall scripts by default; esbuild needs its to fetch the
+# platform binary.
+allowBuilds:
+  esbuild: true

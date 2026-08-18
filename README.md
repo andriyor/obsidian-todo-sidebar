@@ -58,16 +58,18 @@ Then enable **Todo Sidebar** in Settings → Community plugins (Restricted mode 
 
 ## Development
 
-Uses **pnpm** (pinned via `packageManager` in `package.json`).
+Node version in `.nvmrc`, pnpm pinned via `packageManager` in `package.json`.
 
 ```bash
 pnpm install
 pnpm dev     # esbuild watch mode → main.js
 pnpm build   # typecheck + minified production bundle
+pnpm test    # parser unit tests (node --test, no framework)
 ```
 
-`esbuild` is listed under `pnpm.onlyBuiltDependencies` because pnpm blocks postinstall
-scripts by default and esbuild needs its to fetch the platform binary.
+`esbuild` is allowed to run its postinstall script via `allowBuilds` in
+`pnpm-workspace.yaml` — pnpm blocks postinstall by default, and esbuild needs its to fetch
+the platform binary.
 
 Source lives in `src/`; `main.js` at the repo root is the generated bundle and is gitignored.
 

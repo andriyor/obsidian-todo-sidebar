@@ -20,10 +20,10 @@ export const VIEW_TYPE_TODO_SIDEBAR = "todo-sidebar-view";
 
 export class TodoSidebarView extends ItemView {
 	private plugin: TodoSidebarPlugin;
-	private headerEl!: HTMLElement;
 	private titleEl!: HTMLElement;
 	private progressEl!: HTMLElement;
 	private progressBarEl!: HTMLElement;
+	private progressFillEl!: HTMLElement;
 	private bodyEl!: HTMLElement;
 	private toggleCompletedEl!: HTMLElement;
 
@@ -56,8 +56,8 @@ export class TodoSidebarView extends ItemView {
 		this.contentEl.empty();
 		this.contentEl.addClass("todo-sidebar");
 
-		this.headerEl = this.contentEl.createDiv({ cls: "todo-sidebar-header" });
-		const titleRow = this.headerEl.createDiv({ cls: "todo-sidebar-title-row" });
+		const headerEl = this.contentEl.createDiv({ cls: "todo-sidebar-header" });
+		const titleRow = headerEl.createDiv({ cls: "todo-sidebar-title-row" });
 		this.titleEl = titleRow.createDiv({ cls: "todo-sidebar-title" });
 		this.progressEl = titleRow.createDiv({ cls: "todo-sidebar-count" });
 
@@ -71,8 +71,10 @@ export class TodoSidebarView extends ItemView {
 			await this.repaint();
 		});
 
-		this.progressBarEl = this.headerEl.createDiv({ cls: "todo-sidebar-progress" });
-		this.progressBarEl.createDiv({ cls: "todo-sidebar-progress-fill" });
+		this.progressBarEl = headerEl.createDiv({ cls: "todo-sidebar-progress" });
+		this.progressFillEl = this.progressBarEl.createDiv({
+			cls: "todo-sidebar-progress-fill",
+		});
 
 		this.bodyEl = this.contentEl.createDiv({ cls: "todo-sidebar-body" });
 
@@ -237,10 +239,8 @@ export class TodoSidebarView extends ItemView {
 	}
 
 	private setProgress(done: number, total: number): void {
-		const fill = this.progressBarEl.firstElementChild as HTMLElement | null;
-		const percent = total > 0 ? (done / total) * 100 : 0;
 		this.progressBarEl.toggleClass("is-hidden", total === 0);
-		if (fill) fill.style.width = `${percent}%`;
+		this.progressFillEl.style.width = `${total > 0 ? (done / total) * 100 : 0}%`;
 	}
 
 	private renderTasks(
@@ -273,10 +273,10 @@ export class TodoSidebarView extends ItemView {
 				textEl.addClass("todo-sidebar-text-empty");
 				textEl.setText("(empty task)");
 			} else {
+				// The `<p>` MarkdownRenderer wraps inline content in is flattened by
+				// `.todo-sidebar-text p { display: inline }` in styles.css.
 				pending.push(
-					MarkdownRenderer.render(this.app, task.text, textEl, file.path, this).then(
-						() => unwrapParagraph(textEl),
-					),
+					MarkdownRenderer.render(this.app, task.text, textEl, file.path, this),
 				);
 			}
 
@@ -367,14 +367,4 @@ export class TodoSidebarView extends ItemView {
 function isMarkerAt(line: string | undefined, col: number): boolean {
 	if (line === undefined) return false;
 	return line[col - 1] === "[" && line[col + 1] === "]";
-}
-
-/** MarkdownRenderer wraps inline content in a `<p>`; flatten it for inline layout. */
-function unwrapParagraph(el: HTMLElement): void {
-	if (el.childNodes.length !== 1) return;
-	const only = el.firstElementChild;
-	if (only instanceof HTMLParagraphElement) {
-		while (only.firstChild) el.appendChild(only.firstChild);
-		only.remove();
-	}
 }
