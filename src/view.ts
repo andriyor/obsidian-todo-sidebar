@@ -7,7 +7,13 @@ import {
 	debounce,
 	setIcon,
 } from "obsidian";
-import { TaskItem, countTasks, tasksFromCache } from "./parser";
+import {
+	TaskGroup,
+	TaskItem,
+	countTasks,
+	groupByHeading,
+	tasksFromCache,
+} from "./parser";
 import type TodoSidebarPlugin from "./main";
 
 export const VIEW_TYPE_TODO_SIDEBAR = "todo-sidebar-view";
@@ -25,6 +31,8 @@ export class TodoSidebarView extends ItemView {
 	private renderToken = 0;
 	/** Last task tree built from the cache, kept so a toggle can redraw at once. */
 	private tasks: TaskItem[] = [];
+	/** The same tasks, partitioned by heading. Shares TaskItem references. */
+	private groups: TaskGroup[] = [];
 	private file: TFile | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: TodoSidebarPlugin) {
@@ -107,6 +115,7 @@ export class TodoSidebarView extends ItemView {
 
 		if (!file || file.extension !== "md") {
 			this.tasks = [];
+			this.groups = [];
 			this.file = null;
 			this.titleEl.setText("No note open");
 			this.progressEl.setText("");
@@ -122,7 +131,9 @@ export class TodoSidebarView extends ItemView {
 		const content = await this.app.vault.cachedRead(file);
 		if (token !== this.renderToken) return;
 
-		this.tasks = tasksFromCache(this.app.metadataCache.getFileCache(file), content);
+		const cache = this.app.metadataCache.getFileCache(file);
+		this.tasks = tasksFromCache(cache, content);
+		this.groups = groupByHeading(cache, this.tasks);
 		this.file = file;
 		await this.paint(token);
 	}
@@ -148,23 +159,61 @@ export class TodoSidebarView extends ItemView {
 			return;
 		}
 
-		const visible = this.tasks.filter((task) => this.isVisible(task));
-		if (visible.length === 0) {
+		const groups = this.plugin.settings.groupByHeading
+			? this.groups
+			: [{ heading: null, tasks: this.tasks }];
+
+		// Build off-DOM and swap in once markdown rendering settles, to avoid flicker.
+		const container = createDiv({ cls: "todo-sidebar-groups" });
+		const pending: Promise<void>[] = [];
+		let shown = 0;
+
+		for (const group of groups) {
+			// A group whose tasks are all hidden leaves no heading behind.
+			const visible = group.tasks.filter((task) => this.isVisible(task));
+			if (visible.length === 0) continue;
+			shown += visible.length;
+
+			if (group.heading) this.renderGroupHeading(container, group, file);
+			const list = container.createEl("ul", {
+				cls: "todo-sidebar-list todo-sidebar-list-root",
+			});
+			this.renderTasks(visible, list, file, pending);
+		}
+
+		if (shown === 0) {
 			this.renderEmpty("All tasks are done. 🎉");
 			return;
 		}
 
-		// Build off-DOM and swap in once markdown rendering settles, to avoid flicker.
-		const list = createEl("ul", { cls: "todo-sidebar-list todo-sidebar-list-root" });
-		const pending: Promise<void>[] = [];
-		this.renderTasks(visible, list, file, pending);
 		await Promise.all(pending);
 		if (token !== this.renderToken) return;
 
 		const scrollTop = this.bodyEl.scrollTop;
 		this.bodyEl.empty();
-		this.bodyEl.appendChild(list);
+		this.bodyEl.appendChild(container);
 		this.bodyEl.scrollTop = scrollTop;
+	}
+
+	private renderGroupHeading(
+		parentEl: HTMLElement,
+		group: TaskGroup,
+		file: TFile,
+	): void {
+		const heading = group.heading;
+		if (!heading) return;
+
+		const row = parentEl.createDiv({ cls: "todo-sidebar-group" });
+		// Levels are not indented — two hierarchies in one narrow pane read badly —
+		// but expose the level so themes and CSS snippets can style it.
+		row.setAttribute("data-level", String(heading.level));
+		row.createSpan({ cls: "todo-sidebar-group-name", text: heading.text });
+
+		const { total, done } = countTasks(group.tasks);
+		row.createSpan({ cls: "todo-sidebar-group-count", text: `${done}/${total}` });
+
+		row.setAttribute("aria-label", `Line ${heading.line + 1}`);
+		row.addEventListener("click", () => void this.jumpToLine(file, heading.line));
 	}
 
 	/** Hidden only when "hide completed" is on and nothing below it is still open. */

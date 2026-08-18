@@ -5,6 +5,7 @@ An Obsidian plugin that shows every checkbox from the **currently open note** in
 ## What it does
 
 - Lists all `- [ ]` / `- [x]` items of the active note in the right sidebar, nested the way they are in the note.
+- Groups tasks under the heading they sit below, with a per-section `done/total`. Headings that contain no checkboxes are skipped, and clicking a heading jumps to it. Can be turned off in settings.
 - Refreshes when Obsidian re-indexes the note, i.e. shortly after a save (Obsidian's own save is debounced ~2s while you type).
 - Click a checkbox in the panel to toggle it in the note (through the editor, so undo works). The panel updates immediately and the file is saved right away.
 - Click a task's text to jump the cursor to that line in the note.
@@ -33,7 +34,8 @@ Commands:
 - `Todo Sidebar: Show note tasks in sidebar`
 - `Todo Sidebar: Toggle completed tasks visibility`
 
-Settings: hide completed tasks, open the panel automatically on startup.
+Settings: group by heading (on by default), hide completed tasks, open the panel automatically on
+startup.
 
 ## Development
 

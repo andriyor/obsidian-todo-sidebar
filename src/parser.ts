@@ -25,6 +25,53 @@ export interface TaskItem {
 	children: TaskItem[];
 }
 
+/** A run of root-level tasks that sit under the same heading. */
+export interface TaskGroup {
+	/** `null` for tasks that appear before the note's first heading. */
+	heading: { text: string; level: number; line: number } | null;
+	tasks: TaskItem[];
+}
+
+/**
+ * Splits root tasks into groups by the heading they fall under.
+ *
+ * Groups are only created for headings that actually contain tasks, so headings
+ * without checkboxes never reach the sidebar. Tasks are passed through by
+ * reference, not copied, so callers can mutate them in place.
+ */
+export function groupByHeading(
+	cache: CachedMetadata | null,
+	roots: TaskItem[],
+): TaskGroup[] {
+	const headings = cache?.headings;
+	if (!headings || headings.length === 0 || roots.length === 0) {
+		return roots.length > 0 ? [{ heading: null, tasks: roots }] : [];
+	}
+
+	const groups: TaskGroup[] = [];
+	let index = 0;
+	// Both lists are in document order, so one pass over each is enough.
+	let current: TaskGroup["heading"] = null;
+
+	for (const task of roots) {
+		while (index < headings.length && headings[index].position.start.line < task.line) {
+			const heading = headings[index];
+			current = {
+				text: heading.heading,
+				level: heading.level,
+				line: heading.position.start.line,
+			};
+			index++;
+		}
+
+		const last = groups[groups.length - 1];
+		if (last && last.heading === current) last.tasks.push(task);
+		else groups.push({ heading: current, tasks: [task] });
+	}
+
+	return groups;
+}
+
 /** Builds the task tree for a note from its cached metadata. */
 export function tasksFromCache(
 	cache: CachedMetadata | null,
@@ -69,11 +116,12 @@ export function tasksFromCache(
 			children: [],
 		};
 
-		tasksByLine.set(lineNumber, task);
-
 		const parent = nearestTaskAncestor(item, itemsByLine, tasksByLine);
 		if (parent) parent.children.push(task);
 		else roots.push(task);
+
+		// Registered after resolving, so an item can never become its own parent.
+		tasksByLine.set(lineNumber, task);
 	}
 
 	return roots;
@@ -82,25 +130,31 @@ export function tasksFromCache(
 /**
  * Walks up `ListItemCache.parent` to the closest ancestor that is itself a task.
  * Plain-bullet ancestors are skipped, so a task nested under a plain bullet
- * becomes a root rather than a child of an unrelated task. `parent` is negative
- * for items at the root of a list.
+ * becomes a root rather than a child of an unrelated task.
+ *
+ * `parent` is the negative of the list's first line for root items — but a list
+ * starting on line 0 gives `-0`, which is `0`, and so is indistinguishable from
+ * "my parent is on line 0". Candidates are therefore also required to be
+ * indented less than the item itself, which no sibling or self ever is.
  */
 function nearestTaskAncestor(
 	item: ListItemCache,
 	itemsByLine: Map<number, ListItemCache>,
 	tasksByLine: Map<number, TaskItem>,
 ): TaskItem | null {
+	const itemCol = item.position.start.col;
 	let parentLine = item.parent;
 	const visited = new Set<number>();
 
 	while (parentLine >= 0 && !visited.has(parentLine)) {
 		visited.add(parentLine);
 
+		const ancestor = itemsByLine.get(parentLine);
+		if (!ancestor || ancestor.position.start.col >= itemCol) return null;
+
 		const task = tasksByLine.get(parentLine);
 		if (task) return task;
 
-		const ancestor = itemsByLine.get(parentLine);
-		if (!ancestor) return null;
 		parentLine = ancestor.parent;
 	}
 

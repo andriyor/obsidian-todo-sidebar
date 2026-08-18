@@ -3,11 +3,13 @@ import { TodoSidebarView, VIEW_TYPE_TODO_SIDEBAR } from "./view";
 
 interface TodoSidebarSettings {
 	hideCompleted: boolean;
+	groupByHeading: boolean;
 	openOnLoad: boolean;
 }
 
 const DEFAULT_SETTINGS: TodoSidebarSettings = {
 	hideCompleted: false,
+	groupByHeading: true,
 	openOnLoad: false,
 };
 
@@ -97,6 +99,19 @@ class TodoSidebarSettingTab extends PluginSettingTab {
 			.addToggle((toggle) =>
 				toggle.setValue(this.plugin.settings.hideCompleted).onChange(async (value) => {
 					this.plugin.settings.hideCompleted = value;
+					await this.plugin.saveSettings();
+					this.plugin.refreshViews();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Group by heading")
+			.setDesc(
+				"Show tasks under the note heading they belong to. Headings without tasks are skipped.",
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.groupByHeading).onChange(async (value) => {
+					this.plugin.settings.groupByHeading = value;
 					await this.plugin.saveSettings();
 					this.plugin.refreshViews();
 				}),
