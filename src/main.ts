@@ -95,7 +95,9 @@ class TodoSidebarSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Hide completed tasks")
-			.setDesc("Only show tasks that are still open. Also toggleable from the panel header.")
+			.setDesc(
+				"Only show tasks that are still open. Also toggleable from the panel header.",
+			)
 			.addToggle((toggle) =>
 				toggle.setValue(this.plugin.settings.hideCompleted).onChange(async (value) => {
 					this.plugin.settings.hideCompleted = value;

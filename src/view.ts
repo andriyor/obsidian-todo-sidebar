@@ -78,9 +78,7 @@ export class TodoSidebarView extends ItemView {
 
 		this.bodyEl = this.contentEl.createDiv({ cls: "todo-sidebar-body" });
 
-		this.registerEvent(
-			this.app.workspace.on("file-open", () => this.requestRender()),
-		);
+		this.registerEvent(this.app.workspace.on("file-open", () => this.requestRender()));
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", (leaf) => {
 				// Focusing the sidebar itself does not change which note we show.
@@ -97,9 +95,7 @@ export class TodoSidebarView extends ItemView {
 				}
 			}),
 		);
-		this.registerEvent(
-			this.app.vault.on("rename", () => this.requestRender()),
-		);
+		this.registerEvent(this.app.vault.on("rename", () => this.requestRender()));
 
 		await this.render();
 	}
@@ -197,11 +193,7 @@ export class TodoSidebarView extends ItemView {
 		this.bodyEl.scrollTop = scrollTop;
 	}
 
-	private renderGroupHeading(
-		parentEl: HTMLElement,
-		group: TaskGroup,
-		file: TFile,
-	): void {
+	private renderGroupHeading(parentEl: HTMLElement, group: TaskGroup, file: TFile): void {
 		const heading = group.heading;
 		if (!heading) return;
 
