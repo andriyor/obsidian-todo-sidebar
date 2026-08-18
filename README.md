@@ -50,6 +50,22 @@ scripts by default and esbuild needs its to fetch the platform binary.
 
 Source lives in `src/`; `main.js` at the repo root is the generated bundle and is gitignored.
 
+### Releasing
+
+Obsidian and BRAT both install from a GitHub release's **assets**, not from the repository tree,
+so each release needs `main.js`, `manifest.json`, and `styles.css` attached. The release tag, the
+release name, and the `version` inside the released `manifest.json` must all be identical — BRAT
+treats the tag as the source of truth and warns if the manifest disagrees.
+
+```bash
+pnpm build   # main.js is gitignored, so build before attaching it
+gh release create 1.0.0 main.js manifest.json styles.css --title 1.0.0
+```
+
+Bump the version in `manifest.json` (and `package.json`, by convention) first. Add a
+`versions.json` entry only when `minAppVersion` changes. For a pre-release, use a matching
+tag/name/version such as `1.0.1-beta.1` and mark the release as a pre-release.
+
 ## Install with BRAT
 
 [BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewers Auto-update Tool) installs
@@ -65,27 +81,26 @@ BRAT tracks the latest release by default; use the *edit* button beside the plug
 settings to pin ("freeze") a specific release tag instead. Removing a plugin from BRAT's list
 stops updates but does not uninstall it — remove it from Community plugins for that.
 
-> **No release published yet**, so there is nothing for BRAT to fetch just yet. BRAT installs
-> from a GitHub release's **assets**, which must include `main.js`, `manifest.json`, and
-> `styles.css` (BRAT reads the manifest from the release assets, not the repo root). The release
-> tag, release name, and the `version` inside the released `manifest.json` must all be
-> identical — e.g. all three set to `1.0.0`, or `1.0.1-beta.1` for a pre-release. Because
-> `main.js` is gitignored, run `pnpm build` before attaching it, or generate it in a release
-> workflow.
-
 BRAT also works with private repositories, via a fine-grained personal access token with
 read-only *Contents* permission for that repo. Heavy install/reinstall cycles can hit GitHub's
 60-requests-per-hour anonymous API limit; adding a token in BRAT's settings raises it.
 
 ## Install manually
 
-Copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/todo-sidebar/`:
+Download `main.js`, `manifest.json`, and `styles.css` from the
+[latest release](https://github.com/andriyor/obsidian-todo-sidebar/releases/latest) into
+`<vault>/.obsidian/plugins/todo-sidebar/`:
 
 ```bash
 VAULT="/path/to/vault"
-mkdir -p "$VAULT/.obsidian/plugins/todo-sidebar"
-cp main.js manifest.json styles.css "$VAULT/.obsidian/plugins/todo-sidebar/"
+DEST="$VAULT/.obsidian/plugins/todo-sidebar"
+mkdir -p "$DEST"
+gh release download --repo andriyor/obsidian-todo-sidebar \
+	-p main.js -p manifest.json -p styles.css -D "$DEST"
 ```
+
+Building from a clone works too — `main.js` is not committed, so run `pnpm install && pnpm build`
+first, then copy those same three files.
 
 Then enable **Todo Sidebar** in Settings → Community plugins. (Community plugins must be
 turned on, i.e. Restricted mode off.)
