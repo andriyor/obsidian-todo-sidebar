@@ -30,7 +30,12 @@ Commands:
 Settings: group by heading (on by default), hide completed tasks, open the panel automatically on
 startup.
 
-## Install with BRAT
+## Install
+
+Settings → Community plugins → **Browse** → search **Todo Sidebar** → Install → Enable. Or open
+the [directory listing](https://community.obsidian.md/plugins/todo-sidebar).
+
+## Install a pre-release with BRAT
 
 [BRAT](https://github.com/TfTHacker/obsidian42-brat) installs plugins straight from a GitHub
 release and keeps them updated, so testers do not have to copy files by hand.
@@ -65,6 +70,7 @@ pnpm install
 pnpm dev     # esbuild watch mode → main.js
 pnpm build   # typecheck + minified production bundle
 pnpm test    # parser unit tests (node --test, no framework)
+pnpm lint    # @e18e/eslint-plugin recommended (modernization + perf + banned deps)
 ```
 
 `esbuild` is allowed to run its postinstall script via `allowBuilds` in
