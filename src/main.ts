@@ -29,7 +29,7 @@ export default class TodoSidebarPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "open-todo-sidebar",
+			id: "open-panel",
 			name: "Show note tasks in sidebar",
 			callback: () => void this.activateView(),
 		});
@@ -73,7 +73,8 @@ export default class TodoSidebarPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData()) };
+		const saved = (await this.loadData()) as Partial<TodoSidebarSettings> | null;
+		this.settings = { ...DEFAULT_SETTINGS, ...saved };
 	}
 
 	async saveSettings(): Promise<void> {

@@ -4,7 +4,7 @@ An Obsidian plugin that shows every checkbox from the **currently open note** in
 
 ![Task panel in Obsidian's right sidebar, tasks grouped under note headings with a progress bar](img.png)
 
-Requires Obsidian 1.5.0 or newer.
+Requires Obsidian 1.7.2 or newer (for the awaitable `revealLeaf`).
 
 ## What it does
 

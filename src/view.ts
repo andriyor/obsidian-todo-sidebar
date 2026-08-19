@@ -64,12 +64,7 @@ export class TodoSidebarView extends ItemView {
 		this.toggleCompletedEl = titleRow.createDiv({
 			cls: "clickable-icon todo-sidebar-action",
 		});
-		this.toggleCompletedEl.addEventListener("click", async () => {
-			this.plugin.settings.hideCompleted = !this.plugin.settings.hideCompleted;
-			await this.plugin.saveSettings();
-			this.updateHideCompletedIcon();
-			await this.repaint();
-		});
+		this.toggleCompletedEl.addEventListener("click", () => void this.toggleCompleted());
 
 		this.progressBarEl = headerEl.createDiv({ cls: "todo-sidebar-progress" });
 		this.progressFillEl = this.progressBarEl.createDiv({
@@ -214,6 +209,13 @@ export class TodoSidebarView extends ItemView {
 	private isVisible(task: TaskItem): boolean {
 		if (!this.plugin.settings.hideCompleted || !task.checked) return true;
 		return task.children.some((child) => this.isVisible(child));
+	}
+
+	private async toggleCompleted(): Promise<void> {
+		this.plugin.settings.hideCompleted = !this.plugin.settings.hideCompleted;
+		await this.plugin.saveSettings();
+		this.updateHideCompletedIcon();
+		await this.repaint();
 	}
 
 	private updateHideCompletedIcon(): void {
