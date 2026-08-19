@@ -3,6 +3,9 @@ import test from "node:test";
 import type { CachedMetadata, ListItemCache, Pos } from "obsidian";
 import { countTasks, groupByHeading, tasksFromCache } from "../src/parser.ts";
 
+const HEADING_RE = /^(#+) (.*)$/;
+const BULLET_RE = /^(\s*)- (\[(.)\] )?/;
+
 /**
  * Builds the parts of Obsidian's cache that the parser reads, from markdown.
  *
@@ -18,7 +21,7 @@ function cacheFor(md: string): CachedMetadata {
 	let listStart = -1;
 
 	md.split("\n").forEach((text, line) => {
-		const heading = /^(#+) (.*)$/.exec(text);
+		const heading = HEADING_RE.exec(text);
 		if (heading) {
 			headings.push({
 				heading: heading[2],
@@ -30,7 +33,7 @@ function cacheFor(md: string): CachedMetadata {
 			return;
 		}
 
-		const bullet = /^(\s*)- (\[(.)\] )?/.exec(text);
+		const bullet = BULLET_RE.exec(text);
 		if (!bullet) {
 			if (text.trim() === "") {
 				stack.length = 0;
@@ -41,10 +44,10 @@ function cacheFor(md: string): CachedMetadata {
 
 		const col = bullet[1].length;
 		if (listStart === -1) listStart = line;
-		while (stack.length > 0 && stack[stack.length - 1].col >= col) stack.pop();
+		while (stack.length > 0 && stack.at(-1)!.col >= col) stack.pop();
 
 		listItems.push({
-			parent: stack.length > 0 ? stack[stack.length - 1].line : -listStart,
+			parent: stack.length > 0 ? stack.at(-1)!.line : -listStart,
 			task: bullet[3],
 			position: pos(line, col, text.length),
 		});

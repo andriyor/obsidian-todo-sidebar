@@ -64,7 +64,7 @@ export function groupByHeading(
 			index++;
 		}
 
-		const last = groups[groups.length - 1];
+		const last = groups.at(-1);
 		if (last && last.heading === current) last.tasks.push(task);
 		else groups.push({ heading: current, tasks: [task] });
 	}
